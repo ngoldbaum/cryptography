@@ -5,6 +5,8 @@
 
 import binascii
 import os
+import sysconfig
+import threading
 import typing
 
 import pytest
@@ -36,6 +38,8 @@ from cryptography.hazmat.primitives.kdf.kbkdf import (
 )
 
 from ...utils import load_vectors_from_file
+
+IS_FREETHREADED_BUILD = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
 
 
 def _load_all_params(path, file_names, param_loader):
@@ -203,6 +207,7 @@ def hash_test(backend, algorithm, params):
 def generate_base_hash_test(algorithm, digest_size):
     def test_base_hash(self, backend):
         base_hash_test(backend, algorithm, digest_size)
+        multithreaded_hash_test(backend, algorithm)
 
     return test_base_hash
 
@@ -218,6 +223,56 @@ def base_hash_test(backend, algorithm, digest_size):
     copy.update(b"123")
     m.update(b"123")
     assert copy.finalize() == m.finalize()
+
+
+def multithreaded_hash_test(backend, algorithm):
+    # adapted from test_threaded_hashing in CPython's hashlib tests
+    # Updating the same hash object from several threads at once
+    # using data chunk sizes containing the same byte sequences.
+    #
+    # assuming everything is safe, we should get the same digest in
+    # from multiple updates on the same object at once as if we just
+    # did everything in one thread
+    hasher = hashes.Hash(algorithm, backend=backend)
+    num_threads = 5
+    smallest_data = b"swineflu"
+    data = smallest_data * 200000
+    validate_hasher = hasher.copy()
+    validate_hasher.update(data * num_threads)
+    expected_hash = validate_hasher.finalize()
+
+    b = threading.Barrier(num_threads)
+
+    def hash_in_chunks(chunk_size):
+        index = 0
+        b.wait()
+        while index < len(data):
+            try:
+                hasher.update(data[index : index + chunk_size])
+            except RuntimeError as e:
+                # on the free-threaded build we might try to simultaneously
+                # borrow the mutex state at the same time as another thread
+                assert str(e) == "Already borrowed"
+                assert IS_FREETHREADED_BUILD
+                continue
+            index += chunk_size
+
+    threads = []
+    for threadnum in range(num_threads):
+        chunk_size = len(data) // (10**threadnum)
+        assert chunk_size > 0
+        assert chunk_size % len(smallest_data) == 0
+        thread = threading.Thread(target=hash_in_chunks, args=(chunk_size,))
+        threads.append(thread)
+
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    calculated_hash = hasher.finalize()
+
+    assert expected_hash == calculated_hash
 
 
 def generate_base_hmac_test(hash_cls):

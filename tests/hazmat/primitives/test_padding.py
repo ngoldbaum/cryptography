@@ -248,7 +248,7 @@ class TestANSIX923:
 @pytest.mark.parametrize("algorithm", [padding.PKCS7, padding.ANSIX923])
 def test_multithreaded_padding(algorithm):
     switch_default = sys.getswitchinterval()
-    sys.setswitchinterval(.0000001)
+    sys.setswitchinterval(0.0000001)
     num_threads = 4
     padder = algorithm(num_threads * 256).padder()
     validate_padder = algorithm(num_threads * 256).padder()

@@ -11,6 +11,8 @@ import pytest
 from cryptography.exceptions import AlreadyFinalized
 from cryptography.hazmat.primitives import padding
 
+from .utils import IS_FREETHREADED_BUILD
+
 
 class TestPKCS7:
     @pytest.mark.parametrize("size", [127, 4096, -2])
@@ -276,7 +278,11 @@ def test_multithreaded_padding(algorithm):
         while index < len(data):
             try:
                 padder.update(data[index : index + chunk_size])
-            except RuntimeError:
+            except RuntimeError as e:
+                # on the free-threaded build we might try to simultaneously
+                # borrow the mutex state at the same time as another thread
+                assert str(e) == "Already borrowed"
+                assert IS_FREETHREADED_BUILD
                 continue
             index += chunk_size
 

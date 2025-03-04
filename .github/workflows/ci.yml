@@ -150,6 +150,7 @@ jobs:
         run: |
           .nox/local/bin/python -m ensurepip
           .nox/local/bin/python -m pip install git+https://github.com/colesbury/cffi@ft
+          echo "PYTHON_GIL=0" >> $GITHUB_ENV
       - name: Tests
         run: |
             nox --no-install --  --color=yes --wycheproof-root=wycheproof --x509-limbo-root=x509-limbo ${{ matrix.PYTHON.NOXARGS }}

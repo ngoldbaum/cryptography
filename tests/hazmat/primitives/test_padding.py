@@ -245,7 +245,18 @@ class TestANSIX923:
         assert final == unpadded + unpadded
 
 
-@pytest.mark.parametrize("algorithm", [padding.PKCS7, padding.ANSIX923])
+@pytest.mark.parametrize(
+    "algorithm",
+    [
+        padding.PKCS7,
+        pytest.param(
+            padding.ANSIX923,
+            marks=pytest.mark.xfail(
+                reason="Python implementation of ANSIX923 is not thread-safe"
+            ),
+        ),
+    ],
+)
 def test_multithreaded_padding(algorithm):
     switch_default = sys.getswitchinterval()
     sys.setswitchinterval(0.0000001)

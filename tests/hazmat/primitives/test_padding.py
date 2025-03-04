@@ -3,6 +3,9 @@
 # for complete details.
 
 
+import sys
+import threading
+
 import pytest
 
 from cryptography.exceptions import AlreadyFinalized
@@ -240,3 +243,47 @@ class TestANSIX923:
         unpadder = padding.ANSIX923(128).unpadder()
         final = unpadder.update(padded) + unpadder.finalize()
         assert final == unpadded + unpadded
+
+
+@pytest.mark.parametrize("algorithm", [padding.PKCS7, padding.ANSIX923])
+def test_multithreaded_padding(algorithm):
+    switch_default = sys.getswitchinterval()
+    sys.setswitchinterval(.0000001)
+    num_threads = 4
+    padder = algorithm(num_threads * 256).padder()
+    validate_padder = algorithm(num_threads * 256).padder()
+    chunk = b"abcd1234"
+    data = chunk * 16
+    validate_padder.update(data * num_threads)
+    expected_pad = validate_padder.finalize()
+
+    b = threading.Barrier(num_threads)
+
+    def pad_in_chunks(chunk_size):
+        index = 0
+        b.wait()
+        while index < len(data):
+            try:
+                padder.update(data[index : index + chunk_size])
+            except RuntimeError:
+                continue
+            index += chunk_size
+
+    threads = []
+    for threadnum in range(num_threads):
+        chunk_size = len(data) // (2**threadnum)
+        assert chunk_size > 0
+        assert chunk_size % len(chunk) == 0
+        thread = threading.Thread(target=pad_in_chunks, args=(chunk_size,))
+        threads.append(thread)
+
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    sys.setswitchinterval(switch_default)
+
+    calculated_pad = padder.finalize()
+
+    assert expected_pad == calculated_pad

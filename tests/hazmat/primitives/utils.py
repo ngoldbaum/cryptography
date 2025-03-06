@@ -265,7 +265,8 @@ def multithreaded_hash_test(backend, algorithm):
                 hasher.update(data[index : index + chunk_size])
             except RuntimeError as e:
                 # on the free-threaded build we might try to simultaneously
-                # borrow the mutex state at the same time as another thread
+                # borrow the padder state at the same time as another thread
+                # in that case, retry
                 assert str(e) == "Already borrowed"
                 assert IS_FREETHREADED_BUILD
                 continue

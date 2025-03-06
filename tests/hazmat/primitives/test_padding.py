@@ -261,18 +261,30 @@ def test_multithreaded_padding(algorithm):
     padder = algorithm(num_threads * 256).padder()
     validate_padder = algorithm(num_threads * 256).padder()
     chunk = b"abcd1234"
-    data = chunk * 16
-    validate_padder.update(data * num_threads)
-    expected_pad = validate_padder.finalize()
+    data = chunk * 2048
+    expected_pad = validate_padder.update(data * num_threads)
+    expected_pad += validate_padder.finalize()
 
     b = threading.Barrier(num_threads)
+    lock = threading.Lock()
+    calculated_pad = b""
 
     def pad_in_chunks(chunk_size):
+        nonlocal calculated_pad
         index = 0
         b.wait()
         while index < len(data):
             try:
-                padder.update(data[index : index + chunk_size])
+                new_content = padder.update(data[index : index + chunk_size])
+                if IS_FREETHREADED_BUILD:
+                    # rebinding a bytestring is racey on free-threaded
+                    # the thread switch interval in this test isn't fast
+                    # enough to trigger this on the GIL-enabled build maybe?
+                    lock.acquire()
+                    calculated_pad += new_content
+                    lock.release()
+                else:
+                    calculated_pad += new_content
             except RuntimeError as e:
                 # on the free-threaded build we might try to simultaneously
                 # borrow the mutex state at the same time as another thread
@@ -296,6 +308,6 @@ def test_multithreaded_padding(algorithm):
 
     sys.setswitchinterval(switch_default)
 
-    calculated_pad = padder.finalize()
+    calculated_pad += padder.finalize()
 
     assert expected_pad == calculated_pad

@@ -225,6 +225,20 @@ def base_hash_test(backend, algorithm, digest_size):
     assert copy.finalize() == m.finalize()
 
 
+def run_threaded(num_threads, data, chunk, func, prepare_args):
+    threads = []
+    for threadnum in range(num_threads):
+        thread = threading.Thread(
+            target=func, args=prepare_args(data, threadnum)
+        )
+        threads.append(thread)
+
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+
 def multithreaded_hash_test(backend, algorithm):
     # adapted from test_threaded_hashing in CPython's hashlib tests
     # Updating the same hash object from several threads at once
@@ -235,8 +249,8 @@ def multithreaded_hash_test(backend, algorithm):
     # did everything in one thread
     hasher = hashes.Hash(algorithm, backend=backend)
     num_threads = 5
-    smallest_data = b"swineflu"
-    data = smallest_data * 200000
+    chunk = b"swineflu"
+    data = chunk * 200000
     validate_hasher = hasher.copy()
     validate_hasher.update(data * num_threads)
     expected_hash = validate_hasher.finalize()
@@ -257,18 +271,13 @@ def multithreaded_hash_test(backend, algorithm):
                 continue
             index += chunk_size
 
-    threads = []
-    for threadnum in range(num_threads):
+    def prepare_args(data, threadnum):
         chunk_size = len(data) // (10**threadnum)
         assert chunk_size > 0
-        assert chunk_size % len(smallest_data) == 0
-        thread = threading.Thread(target=hash_in_chunks, args=(chunk_size,))
-        threads.append(thread)
+        assert chunk_size % len(chunk) == 0
+        return (chunk_size,)
 
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+    run_threaded(num_threads, data, chunk, hash_in_chunks, prepare_args)
 
     calculated_hash = hasher.finalize()
 

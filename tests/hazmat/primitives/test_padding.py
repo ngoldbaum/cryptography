@@ -3,6 +3,7 @@
 # for complete details.
 
 
+import contextlib
 import sys
 import threading
 
@@ -11,7 +12,7 @@ import pytest
 from cryptography.exceptions import AlreadyFinalized
 from cryptography.hazmat.primitives import padding
 
-from .utils import IS_FREETHREADED_BUILD
+from .utils import IS_FREETHREADED_BUILD, run_threaded
 
 
 class TestPKCS7:
@@ -247,6 +248,21 @@ class TestANSIX923:
         assert final == unpadded + unpadded
 
 
+class SwitchIntervalContext(contextlib.ContextDecorator):
+    def __init__(self, interval):
+        self.interval = interval
+
+    def __enter__(self):
+        self.orig_interval = sys.getswitchinterval()
+        sys.setswitchinterval(self.interval)
+        return self
+
+    def __exit__(self, *exc):
+        sys.setswitchinterval(self.orig_interval)
+        return False
+
+
+@SwitchIntervalContext(0.0000001)
 @pytest.mark.parametrize(
     "algorithm",
     [
@@ -255,19 +271,18 @@ class TestANSIX923:
     ],
 )
 def test_multithreaded_padding(algorithm):
-    switch_default = sys.getswitchinterval()
-    sys.setswitchinterval(0.0000001)
     num_threads = 4
-    padder = algorithm(num_threads * 256).padder()
-    validate_padder = algorithm(num_threads * 256).padder()
     chunk = b"abcd1234"
     data = chunk * 2048
+
+    padder = algorithm(num_threads * 256).padder()
+    validate_padder = algorithm(num_threads * 256).padder()
     expected_pad = validate_padder.update(data * num_threads)
     expected_pad += validate_padder.finalize()
+    calculated_pad = b""
 
     b = threading.Barrier(num_threads)
     lock = threading.Lock()
-    calculated_pad = b""
 
     def pad_in_chunks(chunk_size):
         nonlocal calculated_pad
@@ -277,7 +292,8 @@ def test_multithreaded_padding(algorithm):
             try:
                 new_content = padder.update(data[index : index + chunk_size])
                 if IS_FREETHREADED_BUILD:
-                    # rebinding a bytestring is racey on free-threaded
+                    # rebinding a bytestring is racey on 3.13t
+                    #
                     # the thread switch interval in this test isn't fast
                     # enough to trigger this on the GIL-enabled build maybe?
                     lock.acquire()
@@ -293,21 +309,13 @@ def test_multithreaded_padding(algorithm):
                 continue
             index += chunk_size
 
-    threads = []
-    for threadnum in range(num_threads):
+    def prepare_args(data, threadnum):
         chunk_size = len(data) // (2**threadnum)
         assert chunk_size > 0
         assert chunk_size % len(chunk) == 0
-        thread = threading.Thread(target=pad_in_chunks, args=(chunk_size,))
-        threads.append(thread)
+        return (chunk_size,)
 
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-
-    sys.setswitchinterval(switch_default)
+    run_threaded(num_threads, data, chunk, pad_in_chunks, prepare_args)
 
     calculated_pad += padder.finalize()
-
     assert expected_pad == calculated_pad

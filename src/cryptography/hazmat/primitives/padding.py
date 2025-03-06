@@ -12,6 +12,7 @@ from cryptography.exceptions import AlreadyFinalized
 from cryptography.hazmat.bindings._rust import (
     PKCS7PaddingContext,
     PKCS7UnpaddingContext,
+    _ANSIX923PaddingContext,
     check_ansix923_padding,
 )
 
@@ -36,36 +37,6 @@ def _byte_padding_check(block_size: int) -> None:
 
     if block_size % 8 != 0:
         raise ValueError("block_size must be a multiple of 8.")
-
-
-def _byte_padding_update(
-    buffer_: bytes | None, data: bytes, block_size: int
-) -> tuple[bytes, bytes]:
-    if buffer_ is None:
-        raise AlreadyFinalized("Context was already finalized.")
-
-    utils._check_byteslike("data", data)
-
-    buffer_ += bytes(data)
-
-    finished_blocks = len(buffer_) // (block_size // 8)
-
-    result = buffer_[: finished_blocks * (block_size // 8)]
-    buffer_ = buffer_[finished_blocks * (block_size // 8) :]
-
-    return buffer_, result
-
-
-def _byte_padding_pad(
-    buffer_: bytes | None,
-    block_size: int,
-    paddingfn: Callable[[int], bytes],
-) -> bytes:
-    if buffer_ is None:
-        raise AlreadyFinalized("Context was already finalized.")
-
-    pad_size = block_size // 8 - len(buffer_)
-    return buffer_ + paddingfn(pad_size)
 
 
 def _byte_unpadding_update(
@@ -134,29 +105,7 @@ class ANSIX923:
         return _ANSIX923UnpaddingContext(self.block_size)
 
 
-class _ANSIX923PaddingContext(PaddingContext):
-    _buffer: bytes | None
-
-    def __init__(self, block_size: int):
-        self.block_size = block_size
-        # TODO: more copies than necessary, we should use zero-buffer (#193)
-        self._buffer = b""
-
-    def update(self, data: bytes) -> bytes:
-        self._buffer, result = _byte_padding_update(
-            self._buffer, data, self.block_size
-        )
-        return result
-
-    def _padding(self, size: int) -> bytes:
-        return bytes([0]) * (size - 1) + bytes([size])
-
-    def finalize(self) -> bytes:
-        result = _byte_padding_pad(
-            self._buffer, self.block_size, self._padding
-        )
-        self._buffer = None
-        return result
+PaddingContext.register(_ANSIX923PaddingContext)
 
 
 class _ANSIX923UnpaddingContext(PaddingContext):

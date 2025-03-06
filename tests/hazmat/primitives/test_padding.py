@@ -251,12 +251,7 @@ class TestANSIX923:
     "algorithm",
     [
         padding.PKCS7,
-        pytest.param(
-            padding.ANSIX923,
-            marks=pytest.mark.xfail(
-                reason="Python implementation of ANSIX923 is not thread-safe"
-            ),
-        ),
+        padding.ANSIX923,
     ],
 )
 def test_multithreaded_padding(algorithm):

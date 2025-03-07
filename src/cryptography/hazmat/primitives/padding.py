@@ -5,15 +5,12 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Callable
 
-from cryptography import utils
-from cryptography.exceptions import AlreadyFinalized
 from cryptography.hazmat.bindings._rust import (
     PKCS7PaddingContext,
     PKCS7UnpaddingContext,
     _ANSIX923PaddingContext,
-    check_ansix923_padding,
+    _ANSIX923UnpaddingContext,
 )
 
 
@@ -37,44 +34,6 @@ def _byte_padding_check(block_size: int) -> None:
 
     if block_size % 8 != 0:
         raise ValueError("block_size must be a multiple of 8.")
-
-
-def _byte_unpadding_update(
-    buffer_: bytes | None, data: bytes, block_size: int
-) -> tuple[bytes, bytes]:
-    if buffer_ is None:
-        raise AlreadyFinalized("Context was already finalized.")
-
-    utils._check_byteslike("data", data)
-
-    buffer_ += bytes(data)
-
-    finished_blocks = max(len(buffer_) // (block_size // 8) - 1, 0)
-
-    result = buffer_[: finished_blocks * (block_size // 8)]
-    buffer_ = buffer_[finished_blocks * (block_size // 8) :]
-
-    return buffer_, result
-
-
-def _byte_unpadding_check(
-    buffer_: bytes | None,
-    block_size: int,
-    checkfn: Callable[[bytes], int],
-) -> bytes:
-    if buffer_ is None:
-        raise AlreadyFinalized("Context was already finalized.")
-
-    if len(buffer_) != block_size // 8:
-        raise ValueError("Invalid padding bytes.")
-
-    valid = checkfn(buffer_)
-
-    if not valid:
-        raise ValueError("Invalid padding bytes.")
-
-    pad_size = buffer_[-1]
-    return buffer_[:-pad_size]
 
 
 class PKCS7:
@@ -106,27 +65,4 @@ class ANSIX923:
 
 
 PaddingContext.register(_ANSIX923PaddingContext)
-
-
-class _ANSIX923UnpaddingContext(PaddingContext):
-    _buffer: bytes | None
-
-    def __init__(self, block_size: int):
-        self.block_size = block_size
-        # TODO: more copies than necessary, we should use zero-buffer (#193)
-        self._buffer = b""
-
-    def update(self, data: bytes) -> bytes:
-        self._buffer, result = _byte_unpadding_update(
-            self._buffer, data, self.block_size
-        )
-        return result
-
-    def finalize(self) -> bytes:
-        result = _byte_unpadding_check(
-            self._buffer,
-            self.block_size,
-            check_ansix923_padding,
-        )
-        self._buffer = None
-        return result
+PaddingContext.register(_ANSIX923UnpaddingContext)

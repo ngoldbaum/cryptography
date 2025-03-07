@@ -106,7 +106,8 @@ mod _rust {
     use crate::oid::ObjectIdentifier;
     #[pymodule_export]
     use crate::padding::{
-        check_ansix923_padding, PKCS7PaddingContext, PKCS7UnpaddingContext, _ANSIX923PaddingContext,
+        check_ansix923_padding, PKCS7PaddingContext, PKCS7UnpaddingContext,
+        _ANSIX923PaddingContext, _ANSIX923UnpaddingContext,
     };
     #[pymodule_export]
     use crate::pkcs12::pkcs12;

@@ -291,11 +291,8 @@ def test_multithreaded_padding(algorithm):
         while index < len(data):
             try:
                 new_content = padder.update(data[index : index + chunk_size])
-                if IS_FREETHREADED_BUILD:
-                    # rebinding a bytestring is racey on 3.13t
-                    #
-                    # the thread switch interval in this test isn't fast
-                    # enough to trigger this on the GIL-enabled build maybe?
+                if IS_FREETHREADED_BUILD or sys.version_info < (3, 10):
+                    # appending to a bytestring is racey on 3.13t and < 3.10
                     lock.acquire()
                     calculated_pad += new_content
                     lock.release()

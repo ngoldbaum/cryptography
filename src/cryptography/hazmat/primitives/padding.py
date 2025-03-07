@@ -7,10 +7,10 @@ from __future__ import annotations
 import abc
 
 from cryptography.hazmat.bindings._rust import (
+    ANSIX923PaddingContext,
+    ANSIX923UnpaddingContext,
     PKCS7PaddingContext,
     PKCS7UnpaddingContext,
-    _ANSIX923PaddingContext,
-    _ANSIX923UnpaddingContext,
 )
 
 
@@ -58,11 +58,11 @@ class ANSIX923:
         self.block_size = block_size
 
     def padder(self) -> PaddingContext:
-        return _ANSIX923PaddingContext(self.block_size)
+        return ANSIX923PaddingContext(self.block_size)
 
     def unpadder(self) -> PaddingContext:
-        return _ANSIX923UnpaddingContext(self.block_size)
+        return ANSIX923UnpaddingContext(self.block_size)
 
 
-PaddingContext.register(_ANSIX923PaddingContext)
-PaddingContext.register(_ANSIX923UnpaddingContext)
+PaddingContext.register(ANSIX923PaddingContext)
+PaddingContext.register(ANSIX923UnpaddingContext)

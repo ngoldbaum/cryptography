@@ -111,16 +111,16 @@ impl PKCS7PaddingContext {
 }
 
 #[pyo3::pyclass]
-pub(crate) struct _ANSIX923PaddingContext {
+pub(crate) struct ANSIX923PaddingContext {
     block_size: usize,
     buffer: Option<Vec<u8>>,
 }
 
 #[pyo3::pymethods]
-impl _ANSIX923PaddingContext {
+impl ANSIX923PaddingContext {
     #[new]
-    pub(crate) fn new(block_size: usize) -> _ANSIX923PaddingContext {
-        _ANSIX923PaddingContext {
+    pub(crate) fn new(block_size: usize) -> ANSIX923PaddingContext {
+        ANSIX923PaddingContext {
             block_size: block_size / 8,
             buffer: Some(Vec::new()),
         }
@@ -226,16 +226,16 @@ impl PKCS7UnpaddingContext {
 }
 
 #[pyo3::pyclass]
-pub(crate) struct _ANSIX923UnpaddingContext {
+pub(crate) struct ANSIX923UnpaddingContext {
     block_size: usize,
     buffer: Option<Vec<u8>>,
 }
 
 #[pyo3::pymethods]
-impl _ANSIX923UnpaddingContext {
+impl ANSIX923UnpaddingContext {
     #[new]
-    pub(crate) fn new(block_size: usize) -> _ANSIX923UnpaddingContext {
-        _ANSIX923UnpaddingContext {
+    pub(crate) fn new(block_size: usize) -> ANSIX923UnpaddingContext {
+        ANSIX923UnpaddingContext {
             block_size: block_size / 8,
             buffer: Some(Vec::new()),
         }

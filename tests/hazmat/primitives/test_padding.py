@@ -274,9 +274,10 @@ def test_multithreaded_padding(algorithm):
     num_threads = 4
     chunk = b"abcd1234"
     data = chunk * 2048
+    block_size = 1024  # in bits
 
-    padder = algorithm(num_threads * 256).padder()
-    validate_padder = algorithm(num_threads * 256).padder()
+    padder = algorithm(block_size).padder()
+    validate_padder = algorithm(block_size).padder()
     expected_pad = validate_padder.update(data * num_threads)
     expected_pad += validate_padder.finalize()
     calculated_pad = b""
@@ -307,13 +308,64 @@ def test_multithreaded_padding(algorithm):
                 continue
             index += chunk_size
 
-    def prepare_args(data, threadnum):
+    def prepare_args(threadnum):
         chunk_size = len(data) // (2**threadnum)
         assert chunk_size > 0
         assert chunk_size % len(chunk) == 0
         return (chunk_size,)
 
-    run_threaded(num_threads, data, chunk, pad_in_chunks, prepare_args)
+    run_threaded(num_threads, chunk, pad_in_chunks, prepare_args)
 
     calculated_pad += padder.finalize()
     assert expected_pad == calculated_pad
+
+
+@SwitchIntervalContext(0.0000001)
+@pytest.mark.parametrize(
+    "algorithm, padding_bytes",
+    [(padding.PKCS7, b"\x04" * 4), (padding.ANSIX923, b"\x00" * 3 + b"\x04")],
+)
+def test_multithreaded_unpadding(algorithm, padding_bytes):
+    num_threads = 4
+    num_repeats = 1000
+    chunk = b"abcd"
+    block = chunk + padding_bytes
+
+    padder = algorithm(len(block) * 8).unpadder()
+    validate_padder = algorithm(len(block) * 8).unpadder()
+    expected_unpadded_message = b""
+    for _ in range(num_threads * num_repeats):
+        expected_unpadded_message += validate_padder.update(block)
+    expected_unpadded_message += validate_padder.finalize()
+    calculated_unpadded_message = b""
+
+    b = threading.Barrier(num_threads)
+    lock = threading.Lock()
+
+    def unpad_in_chunks():
+        nonlocal calculated_unpadded_message
+        index = 0
+        b.wait()
+        while index < num_repeats:
+            try:
+                new_content = padder.update(block)
+                if IS_FREETHREADED_BUILD or sys.version_info < (3, 10):
+                    # appending to a bytestring is racey on 3.13t and < 3.10
+                    lock.acquire()
+                    calculated_unpadded_message += new_content
+                    lock.release()
+                else:
+                    calculated_unpadded_message += new_content
+            except RuntimeError as e:
+                # on the free-threaded build we might try to simultaneously
+                # borrow the padder state at the same time as another thread
+                # in that case, retry
+                assert str(e) == "Already borrowed"
+                assert IS_FREETHREADED_BUILD
+                continue
+            index += 1
+
+    run_threaded(num_threads, chunk, unpad_in_chunks, lambda x: tuple())
+
+    calculated_unpadded_message += padder.finalize()
+    assert expected_unpadded_message == calculated_unpadded_message

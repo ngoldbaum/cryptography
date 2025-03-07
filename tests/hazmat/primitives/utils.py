@@ -225,12 +225,10 @@ def base_hash_test(backend, algorithm, digest_size):
     assert copy.finalize() == m.finalize()
 
 
-def run_threaded(num_threads, data, chunk, func, prepare_args):
+def run_threaded(num_threads, chunk, func, prepare_args):
     threads = []
     for threadnum in range(num_threads):
-        thread = threading.Thread(
-            target=func, args=prepare_args(data, threadnum)
-        )
+        thread = threading.Thread(target=func, args=prepare_args(threadnum))
         threads.append(thread)
 
     for thread in threads:
@@ -272,13 +270,13 @@ def multithreaded_hash_test(backend, algorithm):
                 continue
             index += chunk_size
 
-    def prepare_args(data, threadnum):
+    def prepare_args(threadnum):
         chunk_size = len(data) // (10**threadnum)
         assert chunk_size > 0
         assert chunk_size % len(chunk) == 0
         return (chunk_size,)
 
-    run_threaded(num_threads, data, chunk, hash_in_chunks, prepare_args)
+    run_threaded(num_threads, chunk, hash_in_chunks, prepare_args)
 
     calculated_hash = hasher.finalize()
 

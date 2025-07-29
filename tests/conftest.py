@@ -3,6 +3,8 @@
 # for complete details.
 
 import contextlib
+import sys
+import sysconfig
 
 import pytest
 
@@ -66,3 +68,20 @@ class SubTests:
             yield
         except pytest.skip.Exception:
             pass
+
+
+FREE_THREADED_BUILD = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+is_gil_enabled = getattr(sys, "_is_gil_enabled", lambda: True)
+gil_enabled_at_start = is_gil_enabled()
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    if FREE_THREADED_BUILD and not gil_enabled_at_start and is_gil_enabled():
+        tr = terminalreporter
+        tr.ensure_newline()
+        tr.section("GIL re-enabled", sep="=", red=True, bold=True)
+        tr.line("The GIL was re-enabled at runtime during the tests.")
+        tr.line("Please ensure all new pymodules declare support for running")
+        tr.line("without the GIL. Any new tests that intentionally imports ")
+        tr.line("code that re-enables the GIL should do so in a subprocess.")
+        pytest.exit("GIL re-enabled during tests", returncode=1)

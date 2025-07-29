@@ -254,14 +254,14 @@ jobs:
           sudo installer -pkg python.pkg -target /
         env:
           PYTHON_DOWNLOAD_URL: ${{ matrix.PYTHON.DOWNLOAD_URL }}
-        if: contains(matrix.PYTHON.VERSION, 'pypy') == false && matrix.VERSION != '3.14t'
+        if: contains(matrix.PYTHON.VERSION, 'pypy') == false && matrix.PYTHON.VERSION != '3.14t'
       - name: Setup free-threaded python
         run: |
           curl --max-time 30 --retry 5 "$PYTHON_DOWNLOAD_URL" -o python.pkg
           sudo installer -pkg python.pkg -applyChoiceChangesXML .github/config/macos-pkg-choices-freethreaded.xml -target /
         env:
           PYTHON_DOWNLOAD_URL: ${{ matrix.PYTHON.DOWNLOAD_URL }}
-        if: matrix.VERSION == '3.14t'
+        if: matrix.PYTHON.VERSION == '3.14t'
       - name: Setup pypy
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:

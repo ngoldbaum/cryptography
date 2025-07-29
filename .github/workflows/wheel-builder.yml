@@ -294,6 +294,9 @@ jobs:
           name: cryptography-sdist
 
       - run: ${{ matrix.PYTHON.BIN_PATH }} -m pip install -r "${UV_REQUIREMENTS_PATH}"
+      - name: add free-threaded python tools directory to PATH
+        run: echo "/Library/Frameworks/PythonT.framework/Versions/3.14/bin" >> "$GITHUB_PATH"
+        if: matrix.PYTHON.VERSION == '3.14t'
       - run: mkdir wheelhouse
       - name: Build the wheel
         run: |
